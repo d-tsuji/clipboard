@@ -1,0 +1,29 @@
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+#          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Setup X server on ubuntu-latest
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update -y
+          sudo apt install -y xorg openbox
+          sudo startx
+      - name: Setup Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.x
+      - name: Add $GOPATH/bin to $PATH
+        run: echo "::add-path::$(go env GOPATH)/bin"
+      - name: Test
+        run: make test
