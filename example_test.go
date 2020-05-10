@@ -8,7 +8,7 @@ import (
 )
 
 // The purpose of this example is to demonstrate the implementation of get and set.
-func ExampleCopy_and_Paste() {
+func Example() {
 	if err := clipboard.Set("gopher"); err != nil {
 		log.Fatal(err)
 	}
