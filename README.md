@@ -19,3 +19,22 @@ This is a multi-platform clipboard library in Go.
 ### ⚠WIP⚠
 
 - Linux, Unix (X11)
+
+## Installation
+
+```
+go get github.com/d-tsuji/clipboard
+```
+
+## API
+
+```go
+package clipboard
+
+// Get returns the current text data of the clipboard.
+func Get() (string, error)
+
+// Set sets the current text data of the clipboard.
+func Set(text string) error
+```
+
