@@ -1,5 +1,7 @@
 git.wow.st/gmp/clip v0.0.0-20191001134149-1458ba6a7cf5 h1:OKeTjZST+/TKvtdA258NXJH+/gIx/xwyZxKrAezNFvk=
 git.wow.st/gmp/clip v0.0.0-20191001134149-1458ba6a7cf5/go.mod h1:NLdpaBoMQNFqncwP8OVRNWUDw1Kt9XWm3snfT7cXu24=
+github.com/BurntSushi/xgb v0.0.0-20200324125942-20f126ea2843 h1:3iF31c7rp7nGZVDv7YQ+VxOgpipVfPKotLXykjZmwM8=
+github.com/BurntSushi/xgb v0.0.0-20200324125942-20f126ea2843/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/lxn/walk v0.0.0-20191128110447-55ccb3a9f5c1 h1:/QwQcwWVOQXcoNuV9tHx30gQ3q7jCE/rKcGjwzsa5tg=
 github.com/lxn/walk v0.0.0-20191128110447-55ccb3a9f5c1/go.mod h1:E23UucZGqpuUANJooIbHWCufXvOcT6E7Stq81gU+CSQ=
 github.com/lxn/win v0.0.0-20191128105842-2da648fda5b4 h1:5BmtGkQbch91lglMHQ9JIDGiYCL3kBRBA0ItZTvOcEI=

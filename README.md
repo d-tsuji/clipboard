@@ -15,9 +15,6 @@ This is a multi-platform clipboard library in Go.
 
 - Windows
 - macOS
-
-### ⚠WIP⚠
-
 - Linux, Unix (X11)
 
 ## Installation

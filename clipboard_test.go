@@ -21,7 +21,7 @@ func TestCopyAndPaste(t *testing.T) {
 				t.Error(err)
 			}
 			if got != tt.want {
-				t.Errorf("CopyAndPaste mismatch: got %v, want %v", got, tt.want)
+				t.Errorf("copy and paste mismatch: got %v, want %v", got, tt.want)
 			}
 		})
 	}

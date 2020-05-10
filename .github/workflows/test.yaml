@@ -13,12 +13,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@master
-      - name: Setup X server on ubuntu-latest
+      - name: Setup X on Linux
         if: runner.os == 'Linux'
         run: |
           sudo apt update -y
-          sudo apt install -y xorg openbox
-          sudo startx
+          sudo apt install xvfb
       - name: Setup Go
         uses: actions/setup-go@v1
         with:
