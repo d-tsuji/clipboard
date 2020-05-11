@@ -19,7 +19,7 @@ import (
 const debugClipboardRequests = false
 
 var (
-	X             *xgb.Conn
+	x             *xgb.Conn
 	win           xproto.Window
 	clipboardText string
 	selnotify     chan bool
@@ -37,30 +37,30 @@ func start() error {
 	if xServer == "" {
 		return xerrors.New("could not identify xserver")
 	}
-	X, err = xgb.NewConnDisplay(xServer)
+	x, err = xgb.NewConnDisplay(xServer)
 	if err != nil {
 		return xerrors.Errorf("%w", err)
 	}
 
 	selnotify = make(chan bool, 1)
 
-	win, err = xproto.NewWindowId(X)
+	win, err = xproto.NewWindowId(x)
 	if err != nil {
 		return xerrors.Errorf("%w", err)
 	}
 
-	setup := xproto.Setup(X)
-	s := setup.DefaultScreen(X)
-	err = xproto.CreateWindowChecked(X, s.RootDepth, win, s.Root, 100, 100, 1, 1, 0, xproto.WindowClassInputOutput, s.RootVisual, 0, []uint32{}).Check()
+	setup := xproto.Setup(x)
+	s := setup.DefaultScreen(x)
+	err = xproto.CreateWindowChecked(x, s.RootDepth, win, s.Root, 100, 100, 1, 1, 0, xproto.WindowClassInputOutput, s.RootVisual, 0, []uint32{}).Check()
 	if err != nil {
 		return xerrors.Errorf("%w", err)
 	}
 
-	clipboardAtom = internAtom(X, "CLIPBOARD")
-	primaryAtom = internAtom(X, "PRIMARY")
-	textAtom = internAtom(X, "UTF8_STRING")
-	targetsAtom = internAtom(X, "TARGETS")
-	atomAtom = internAtom(X, "ATOM")
+	clipboardAtom = internAtom(x, "CLIPBOARD")
+	primaryAtom = internAtom(x, "PRIMARY")
+	textAtom = internAtom(x, "UTF8_STRING")
+	targetsAtom = internAtom(x, "TARGETS")
+	atomAtom = internAtom(x, "ATOM")
 
 	targetAtoms = []xproto.Atom{targetsAtom, textAtom}
 
@@ -74,7 +74,7 @@ func set(text string) error {
 		return xerrors.Errorf("init clipboard: %w", err)
 	}
 	clipboardText = text
-	ssoc := xproto.SetSelectionOwnerChecked(X, win, clipboardAtom, xproto.TimeCurrentTime)
+	ssoc := xproto.SetSelectionOwnerChecked(x, win, clipboardAtom, xproto.TimeCurrentTime)
 	if err := ssoc.Check(); err != nil {
 		return xerrors.Errorf("setting clipboard: %w", err)
 	}
@@ -89,7 +89,7 @@ func get() (string, error) {
 }
 
 func getSelection(selAtom xproto.Atom) (string, error) {
-	csc := xproto.ConvertSelectionChecked(X, win, selAtom, textAtom, selAtom, xproto.TimeCurrentTime)
+	csc := xproto.ConvertSelectionChecked(x, win, selAtom, textAtom, selAtom, xproto.TimeCurrentTime)
 	err := csc.Check()
 	if err != nil {
 		return "", xerrors.Errorf("convert selection check: %w", err)
@@ -100,7 +100,7 @@ func getSelection(selAtom xproto.Atom) (string, error) {
 		if !r {
 			return "", nil
 		}
-		gpc := xproto.GetProperty(X, true, win, selAtom, textAtom, 0, 5*1024*1024)
+		gpc := xproto.GetProperty(x, true, win, selAtom, textAtom, 0, 5*1024*1024)
 		gpr, err := gpc.Reply()
 		if err != nil {
 			return "", xerrors.Errorf("grp reply: %w", err)
@@ -131,7 +131,7 @@ func pollForEvent(X *xgb.Conn, events chan<- xgb.Event) {
 
 func eventLoop() {
 	eventCh := make(chan xgb.Event, 1)
-	go pollForEvent(X, eventCh)
+	go pollForEvent(x, eventCh)
 	for {
 		select {
 		case event := <-eventCh:
@@ -149,7 +149,7 @@ func eventLoop() {
 					if debugClipboardRequests {
 						fmt.Println("Sending as text")
 					}
-					cpc := xproto.ChangePropertyChecked(X, xproto.PropModeReplace, e.Requestor, e.Property, textAtom, 8, uint32(len(t)), []byte(t))
+					cpc := xproto.ChangePropertyChecked(x, xproto.PropModeReplace, e.Requestor, e.Property, textAtom, 8, uint32(len(t)), []byte(t))
 					err := cpc.Check()
 					if err == nil {
 						sendSelectionNotify(e)
@@ -166,7 +166,7 @@ func eventLoop() {
 						xgb.Put32(buf[i*4:], uint32(atom))
 					}
 
-					err := xproto.ChangePropertyChecked(X, xproto.PropModeReplace, e.Requestor, e.Property, atomAtom, 32, uint32(len(targetAtoms)), buf).Check()
+					err := xproto.ChangePropertyChecked(x, xproto.PropModeReplace, e.Requestor, e.Property, atomAtom, 32, uint32(len(targetAtoms)), buf).Check()
 					if err == nil {
 						sendSelectionNotify(e)
 					} else {
@@ -195,7 +195,7 @@ func lookupAtom(at xproto.Atom) string {
 		return s
 	}
 
-	reply, err := xproto.GetAtomName(X, at).Reply()
+	reply, err := xproto.GetAtomName(x, at).Reply()
 	if err != nil {
 		panic(err)
 	}
@@ -213,7 +213,7 @@ func sendSelectionNotify(e xproto.SelectionRequestEvent) {
 		Selection: e.Selection,
 		Target:    e.Target,
 		Property:  e.Property}
-	sec := xproto.SendEventChecked(X, false, e.Requestor, 0, string(sn.Bytes()))
+	sec := xproto.SendEventChecked(x, false, e.Requestor, 0, string(sn.Bytes()))
 	err := sec.Check()
 	if err != nil {
 		fmt.Println(err)
