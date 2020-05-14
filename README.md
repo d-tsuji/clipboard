@@ -13,12 +13,18 @@ This is a multi-platform clipboard library in Go.
 
 ## Supported Platforms
 
-- Windows
-- macOS
+- Windows (Pure Go)
+- macOS (required cgo)
 
 ### ⚠WIP⚠
 
 - Linux, Unix (X11)
+
+*Unfortunately, I don't think it's feasible for Linux to build clipboard library, because xclient needs to be referenced as a daemon in order to keep the clipboard data. This approach is the same for [xclip](https://github.com/astrand/xclip) and [xsel](https://github.com/kfish/xsel).*
+
+*Go has an approach to running its own programs as external processes, such as [VividCortex/godaemon](https://github.com/VividCortex/godaemon) and [sevlyar/go-daemon](https://github.com/sevlyar/go-daemon). But these cannot be incorporated as a library, of course. xclip and xsel can also be achieved because they are completed as binaries, not libraries.*
+
+*So it turns out that it is not possible to achieve clipboard in Linux as a library.*
 
 ## Installation
 
