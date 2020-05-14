@@ -7,13 +7,14 @@
 package clipboard
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/BurntSushi/xgb"
 	"github.com/BurntSushi/xgb/xproto"
-	"golang.org/x/xerrors"
+	"github.com/sevlyar/go-daemon"
 )
 
 const debugClipboardRequests = false
@@ -28,32 +29,32 @@ var (
 	targetAtoms                                                 []xproto.Atom
 	clipboardAtomCache                                          = map[xproto.Atom]string{}
 
-	doneCh = make(chan interface{}, 1)
+	doneCh = make(chan interface{})
 )
 
 func start() error {
 	var err error
 	xServer := os.Getenv("DISPLAY")
 	if xServer == "" {
-		return xerrors.New("could not identify xserver")
+		return errors.New("could not identify xserver")
 	}
 	x, err = xgb.NewConnDisplay(xServer)
 	if err != nil {
-		return xerrors.Errorf("%w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	selnotify = make(chan bool, 1)
 
 	win, err = xproto.NewWindowId(x)
 	if err != nil {
-		return xerrors.Errorf("%w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	setup := xproto.Setup(x)
 	s := setup.DefaultScreen(x)
 	err = xproto.CreateWindowChecked(x, s.RootDepth, win, s.Root, 100, 100, 1, 1, 0, xproto.WindowClassInputOutput, s.RootVisual, 0, []uint32{}).Check()
 	if err != nil {
-		return xerrors.Errorf("%w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	clipboardAtom = internAtom(x, "CLIPBOARD")
@@ -70,20 +71,33 @@ func start() error {
 }
 
 func set(text string) error {
+	d := &daemon.Context{}
+
+	_, err := d.Reborn()
+	if err != nil {
+		fmt.Errorf("unable to run: %w", err)
+	}
+	defer d.Release()
+
+	//　The following will run as a daemon.
 	if err := start(); err != nil {
-		return xerrors.Errorf("init clipboard: %w", err)
+		return fmt.Errorf("init clipboard: %w", err)
 	}
 	clipboardText = text
 	ssoc := xproto.SetSelectionOwnerChecked(x, win, clipboardAtom, xproto.TimeCurrentTime)
 	if err := ssoc.Check(); err != nil {
-		return xerrors.Errorf("setting clipboard: %w", err)
+		return fmt.Errorf("setting clipboard: %w", err)
 	}
+
+	// Wait for the SelectionClear event.
+	<-doneCh
+
 	return nil
 }
 
 func get() (string, error) {
 	if err := start(); err != nil {
-		return "", xerrors.Errorf("init clipboard: %w", err)
+		return "", fmt.Errorf("init clipboard: %w", err)
 	}
 	return getSelection(clipboardAtom)
 }
@@ -92,7 +106,7 @@ func getSelection(selAtom xproto.Atom) (string, error) {
 	csc := xproto.ConvertSelectionChecked(x, win, selAtom, textAtom, selAtom, xproto.TimeCurrentTime)
 	err := csc.Check()
 	if err != nil {
-		return "", xerrors.Errorf("convert selection check: %w", err)
+		return "", fmt.Errorf("convert selection check: %w", err)
 	}
 
 	select {
@@ -103,89 +117,73 @@ func getSelection(selAtom xproto.Atom) (string, error) {
 		gpc := xproto.GetProperty(x, true, win, selAtom, textAtom, 0, 5*1024*1024)
 		gpr, err := gpc.Reply()
 		if err != nil {
-			return "", xerrors.Errorf("grp reply: %w", err)
+			return "", fmt.Errorf("grp reply: %w", err)
 		}
 		if gpr.BytesAfter != 0 {
-			return "", xerrors.New("clipboard too large")
+			return "", errors.New("clipboard too large")
 		}
 		return string(gpr.Value[:gpr.ValueLen]), nil
 	case <-time.After(1 * time.Second):
-		return "", xerrors.New("clipboard retrieval failed, timeout")
-	}
-}
-
-func pollForEvent(X *xgb.Conn, events chan<- xgb.Event) {
-	for {
-		select {
-		case <-doneCh:
-			return
-		default:
-			ev, err := X.PollForEvent()
-			if err != nil {
-				fmt.Println("wait for event:", err)
-			}
-			events <- ev
-		}
+		return "", errors.New("clipboard retrieval failed, timeout")
 	}
 }
 
 func eventLoop() {
-	eventCh := make(chan xgb.Event, 1)
-	go pollForEvent(x, eventCh)
 	for {
-		select {
-		case event := <-eventCh:
-			switch e := event.(type) {
-			case xproto.SelectionRequestEvent:
-				if debugClipboardRequests {
-					tgtname := lookupAtom(e.Target)
-					propname := lookupAtom(e.Property)
-					fmt.Println("SelectionRequest", e, textAtom, tgtname, propname, "isPrimary:", e.Selection == primaryAtom, "isClipboard:", e.Selection == clipboardAtom)
-				}
-				t := clipboardText
+		e, err := x.WaitForEvent()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "WaitForEvent error")
+			continue
+		}
 
-				switch e.Target {
-				case textAtom:
-					if debugClipboardRequests {
-						fmt.Println("Sending as text")
-					}
-					cpc := xproto.ChangePropertyChecked(x, xproto.PropModeReplace, e.Requestor, e.Property, textAtom, 8, uint32(len(t)), []byte(t))
-					err := cpc.Check()
-					if err == nil {
-						sendSelectionNotify(e)
-					} else {
-						fmt.Println(err)
-					}
-
-				case targetsAtom:
-					if debugClipboardRequests {
-						fmt.Println("Sending targets")
-					}
-					buf := make([]byte, len(targetAtoms)*4)
-					for i, atom := range targetAtoms {
-						xgb.Put32(buf[i*4:], uint32(atom))
-					}
-
-					err := xproto.ChangePropertyChecked(x, xproto.PropModeReplace, e.Requestor, e.Property, atomAtom, 32, uint32(len(targetAtoms)), buf).Check()
-					if err == nil {
-						sendSelectionNotify(e)
-					} else {
-						fmt.Println(err)
-					}
-
-				default:
-					if debugClipboardRequests {
-						fmt.Println("Skipping")
-					}
-					e.Property = 0
-					sendSelectionNotify(e)
-				}
-
-			case xproto.SelectionNotifyEvent:
-				selnotify <- (e.Property == clipboardAtom) || (e.Property == primaryAtom)
+		switch e := e.(type) {
+		case xproto.SelectionRequestEvent:
+			if debugClipboardRequests {
+				tgtname := lookupAtom(e.Target)
+				fmt.Fprintln(os.Stderr, "SelectionRequest", e, textAtom, tgtname, "isPrimary:", e.Selection == primaryAtom, "isClipboard:", e.Selection == clipboardAtom)
 			}
-		case <-doneCh:
-			return
+			t := clipboardText
+
+			switch e.Target {
+			case textAtom:
+				if debugClipboardRequests {
+					fmt.Fprintln(os.Stderr, "Sending as text")
+				}
+				cpc := xproto.ChangePropertyChecked(x, xproto.PropModeReplace, e.Requestor, e.Property, textAtom, 8, uint32(len(t)), []byte(t))
+				if cpc.Check() == nil {
+					sendSelectionNotify(e)
+				} else {
+					fmt.Fprintln(os.Stderr, err)
+				}
+
+			case targetsAtom:
+				if debugClipboardRequests {
+					fmt.Fprintln(os.Stderr, "Sending targets")
+				}
+				buf := make([]byte, len(targetAtoms)*4)
+				for i, atom := range targetAtoms {
+					xgb.Put32(buf[i*4:], uint32(atom))
+				}
+
+				cpc := xproto.ChangePropertyChecked(x, xproto.PropModeReplace, e.Requestor, e.Property, atomAtom, 32, uint32(len(targetAtoms)), buf)
+				if cpc.Check() == nil {
+					sendSelectionNotify(e)
+				} else {
+					fmt.Fprintln(os.Stderr, err)
+				}
+
+			default:
+				if debugClipboardRequests {
+					fmt.Fprintln(os.Stderr, "Skipping")
+				}
+				e.Property = 0
+				sendSelectionNotify(e)
+			}
+		case xproto.SelectionNotifyEvent:
+			selnotify <- (e.Property == clipboardAtom) || (e.Property == primaryAtom)
+		case xproto.SelectionClearEvent:
+			// Client loses ownership of a selection, so daemon process exit.
+			doneCh <- struct{}{}
 		}
 	}
 }
