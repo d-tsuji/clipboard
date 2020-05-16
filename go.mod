@@ -10,6 +10,5 @@ require (
 	github.com/lxn/win v0.0.0-20191128105842-2da648fda5b4 // indirect
 	github.com/sevlyar/go-daemon v0.1.5
 	golang.org/x/sys v0.0.0-20200509044756-6aff5f38e54f // indirect
-	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 	gopkg.in/Knetic/govaluate.v3 v3.0.0 // indirect
 )
