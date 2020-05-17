@@ -10,11 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/xgb"
 	"github.com/BurntSushi/xgb/xproto"
-	"github.com/sevlyar/go-daemon"
 )
 
 const debugClipboardRequests = false
@@ -71,13 +71,50 @@ func start() error {
 }
 
 func set(text string) error {
-	d := &daemon.Context{}
+	//d := &daemon.Context{}
+	//
+	//_, err := d.Reborn()
+	//if err != nil {
+	//	fmt.Errorf("unable to run: %w", err)
+	//}
+	//defer d.Release()
 
-	_, err := d.Reborn()
-	if err != nil {
-		fmt.Errorf("unable to run: %w", err)
+	var ret uintptr
+	var err syscall.Errno
+	ret, _, err = syscall.Syscall(syscall.SYS_FORK, 0, 0, 0)
+	if err != 0 {
+		fmt.Println("error")
+		os.Exit(-1)
 	}
-	defer d.Release()
+	switch ret {
+	case 0:
+		break
+	default:
+		return nil
+	}
+	sid, _ := syscall.Setsid()
+	if sid == -1 {
+		fmt.Println(sid, "error")
+		os.Exit(-1)
+	}
+
+	f, e := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if e != nil {
+		fmt.Println(sid, "error")
+		os.Exit(1)
+	}
+	defer f.Close()
+	fd := int(f.Fd())
+	syscall.Dup2(fd, syscall.Stdin)
+	syscall.Dup2(fd, syscall.Stdout)
+	syscall.Dup2(fd, syscall.Stderr)
+
+	syscall.Umask(0)
+
+	if err := syscall.Chdir("/"); err != nil {
+		fmt.Println(sid, "error")
+		os.Exit(1)
+	}
 
 	//　The following will run as a daemon.
 	if err := start(); err != nil {
